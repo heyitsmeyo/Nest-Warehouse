@@ -32,7 +32,10 @@
     "three-stdlib": "^2.35.15",
     "tw-animate-css": "^1.2.5",
     "ws": "^8.18.1",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "ai": "^2.2.31",
+    "@ai-sdk/gemini": "^1.0.0",
+    "@ai-sdk/react": "^1.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
