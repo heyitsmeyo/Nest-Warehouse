@@ -1,0 +1,89 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Box {
+  id        Int       @id @default(autoincrement())
+  tag              String  
+  name      String
+  width     Float
+  height    Float
+  depth     Float
+  weight    Float
+  color     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  slot      ShelfSlot?
+}
+
+model Shelf {
+  id              Int         @id @default(autoincrement())
+  name            String      @unique
+  initialHeight   Float       // Base height in cm
+  ShelfSlotHeight Float       // Height between levels in cm
+  levels          Int         @default(2)
+  slots           ShelfSlot[]
+  location        WarehouseNode @relation(fields: [locationId], references: [id])
+  locationId      String      @unique
+  tag              String  
+  color           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model ShelfSlot {
+  id        Int      @id @default(autoincrement())
+  shelf     Shelf    @relation(fields: [shelfId], references: [id], onDelete: Cascade)
+  shelfId   Int
+  level     Int      // 1, 2 or 3
+  box       Box?     @relation(fields: [boxId], references: [id])
+  boxId     Int?     @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shelfId, level])
+  @@index([shelfId])
+  @@index([boxId])
+}
+
+model WarehouseNode {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  x         Float
+  y         Float
+  isHome    Boolean  @default(false)
+  isTag     Boolean  @default(false)
+  tagColor  String?
+  shelf     Shelf?   // Reverse relation for shelf location
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  connectionsFrom WarehouseConnection[] @relation("FromNode")
+  connectionsTo   WarehouseConnection[] @relation("ToNode")
+}
+
+model WarehouseConnection {
+  id        String   @id @default(uuid())
+  fromNode  String
+  toNode    String
+  distance  Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  nodeFrom WarehouseNode @relation("FromNode", fields: [fromNode], references: [name])
+  nodeTo   WarehouseNode @relation("ToNode", fields: [toNode], references: [name])
+
+  @@unique([fromNode, toNode])
+  @@index([fromNode])
+  @@index([toNode])
+} 
