@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const runTest = async () => {
   try {
-    const response = await axios.post('http://192.168.212.181:3000/api/path', {
+    const response = await axios.post('http://localhost:3000/api/path', {
       name: 'TAG1'
     });
 

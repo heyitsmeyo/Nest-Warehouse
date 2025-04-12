@@ -7,9 +7,12 @@ import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { CuboidIcon as Cube, Eye, Layers, Network } from "lucide-react"
+import { CuboidIcon as Cube, Eye, Layers, Network, Play, RotateCw, Target } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { gsap } from "gsap"
 
 interface WarehouseNode {
   id: string
@@ -71,6 +74,16 @@ interface Box {
   tag: string
 }
 
+interface PathNode {
+  name: string
+  x: number
+  y: number
+  g: number
+  h: number
+  f: number
+  parent?: PathNode
+}
+
 export default function WarehouseMonitoringPage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -80,6 +93,13 @@ export default function WarehouseMonitoringPage() {
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [boxes, setBoxes] = useState<Box[]>([])
   const [hasAnimated, setHasAnimated] = useState(false)
+
+  // Robot simulation states
+  const [targetNode, setTargetNode] = useState<string>("")
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [simulationPath, setSimulationPath] = useState<string[]>([])
+  const robotRef = useRef<THREE.Group | null>(null)
+  const pathRef = useRef<THREE.Line | null>(null)
 
   // Visibility toggles
   const [showNodes, setShowNodes] = useState(false)
@@ -98,6 +118,7 @@ export default function WarehouseMonitoringPage() {
   const connectionsGroupRef = useRef<THREE.Group | null>(null)
   const shelvesGroupRef = useRef<THREE.Group | null>(null)
   const boxesGroupRef = useRef<THREE.Group | null>(null)
+  const robotGroupRef = useRef<THREE.Group | null>(null)
 
   // Fetch warehouse data
   useEffect(() => {
@@ -197,11 +218,13 @@ export default function WarehouseMonitoringPage() {
     connectionsGroupRef.current = new THREE.Group()
     shelvesGroupRef.current = new THREE.Group()
     boxesGroupRef.current = new THREE.Group()
+    robotGroupRef.current = new THREE.Group()
 
     scene.add(nodesGroupRef.current)
     scene.add(connectionsGroupRef.current)
     scene.add(shelvesGroupRef.current)
     scene.add(boxesGroupRef.current)
+    scene.add(robotGroupRef.current)
 
     // Add ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
@@ -709,6 +732,95 @@ export default function WarehouseMonitoringPage() {
     })
   }, [boxes, shelves, nodes, showBoxes])
 
+  // Create robot model
+  useEffect(() => {
+    if (!robotGroupRef.current || !sceneRef.current || nodes.length === 0) return
+
+    // Clear previous robot
+    while (robotGroupRef.current.children.length > 0) {
+      const object = robotGroupRef.current.children[0]
+      robotGroupRef.current.remove(object)
+    }
+
+    // Create robot group
+    const robotGroup = new THREE.Group()
+    robotRef.current = robotGroup
+
+    // Create robot body - make it larger and more visible
+    const bodyGeometry = new THREE.CylinderGeometry(0.7, 0.7, 0.4, 16)
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+      color: 0xff3e00, // Bright orange
+      roughness: 0.3,
+      metalness: 0.7,
+      emissive: 0xff3e00,
+      emissiveIntensity: 0.2,
+    })
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial)
+    body.position.y = 0.2
+    body.castShadow = true
+    robotGroup.add(body)
+
+    // Add a directional indicator (arrow)
+    const arrowGeometry = new THREE.ConeGeometry(0.3, 0.6, 8)
+    const arrowMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.3,
+      metalness: 0.7,
+    })
+    const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial)
+    arrow.rotation.x = Math.PI / 2
+    arrow.position.set(0, 0.2, 0.6)
+    robotGroup.add(arrow)
+
+    // Add a light on top
+    const lightGeometry = new THREE.SphereGeometry(0.25, 16, 16)
+    const lightMaterial = new THREE.MeshStandardMaterial({
+      color: 0x00ffff,
+      emissive: 0x00ffff,
+      emissiveIntensity: 0.8,
+      roughness: 0.1,
+      metalness: 0.9,
+    })
+    const light = new THREE.Mesh(lightGeometry, lightMaterial)
+    light.position.y = 0.5
+    robotGroup.add(light)
+
+    // Add wheels
+    const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16)
+    const wheelMaterial = new THREE.MeshStandardMaterial({
+      color: 0x333333,
+      roughness: 0.8,
+      metalness: 0.2,
+    })
+
+    // Left wheel
+    const leftWheel = new THREE.Mesh(wheelGeometry, wheelMaterial)
+    leftWheel.rotation.z = Math.PI / 2
+    leftWheel.position.set(0.5, 0, 0)
+    robotGroup.add(leftWheel)
+
+    // Right wheel
+    const rightWheel = new THREE.Mesh(wheelGeometry, wheelMaterial)
+    rightWheel.rotation.z = Math.PI / 2
+    rightWheel.position.set(-0.5, 0, 0)
+    robotGroup.add(rightWheel)
+
+    // Find start node to position robot initially
+    const startNode = nodes.find((node) => node.name === "Start")
+    if (startNode) {
+      robotGroup.position.set(startNode.x, 0.3, -startNode.y)
+    } else {
+      // If no start node, position at origin
+      robotGroup.position.set(0, 0.3, 0)
+    }
+
+    // Add robot to scene
+    robotGroupRef.current.add(robotGroup)
+
+    // Make robot visible by default
+    robotGroupRef.current.visible = true
+  }, [nodes])
+
   // Update visibility when toggles change
   useEffect(() => {
     if (nodesGroupRef.current) nodesGroupRef.current.visible = showNodes
@@ -716,6 +828,288 @@ export default function WarehouseMonitoringPage() {
     if (shelvesGroupRef.current) shelvesGroupRef.current.visible = showShelves
     if (boxesGroupRef.current) boxesGroupRef.current.visible = showBoxes
   }, [showNodes, showConnections, showShelves, showBoxes])
+
+  // A* pathfinding algorithm
+  const findPath = (startNodeName: string, endNodeName: string) => {
+    // Create a map of node names to nodes for quick lookup
+    const nodeMap = new Map(nodes.map((node) => [node.name, node]))
+
+    // Create a map of connections for each node
+    const connectionMap = new Map<string, { node: string; distance: number }[]>()
+
+    connections.forEach((connection) => {
+      if (!connectionMap.has(connection.fromNode)) {
+        connectionMap.set(connection.fromNode, [])
+      }
+      if (!connectionMap.has(connection.toNode)) {
+        connectionMap.set(connection.toNode, [])
+      }
+
+      // Add bidirectional connections
+      connectionMap.get(connection.fromNode)?.push({
+        node: connection.toNode,
+        distance: connection.distance,
+      })
+      connectionMap.get(connection.toNode)?.push({
+        node: connection.fromNode,
+        distance: connection.distance,
+      })
+    })
+
+    // Get start and end nodes
+    const startNode = nodeMap.get(startNodeName)
+    const endNode = nodeMap.get(endNodeName)
+
+    if (!startNode || !endNode) {
+      console.error("Start or end node not found")
+      return []
+    }
+
+    // Initialize open and closed sets
+    const openSet: PathNode[] = []
+    const closedSet = new Set<string>()
+
+    // Add start node to open set
+    openSet.push({
+      name: startNode.name,
+      x: startNode.x,
+      y: startNode.y,
+      g: 0,
+      h: Math.sqrt(Math.pow(endNode.x - startNode.x, 2) + Math.pow(endNode.y - startNode.y, 2)),
+      f: Math.sqrt(Math.pow(endNode.x - startNode.x, 2) + Math.pow(endNode.y - startNode.y, 2)),
+    })
+
+    // A* algorithm
+    while (openSet.length > 0) {
+      // Find node with lowest f score
+      openSet.sort((a, b) => a.f - b.f)
+      const current = openSet.shift()!
+
+      // If we reached the end node
+      if (current.name === endNodeName) {
+        // Reconstruct path
+        const path: string[] = []
+        let currentNode: PathNode | undefined = current
+
+        while (currentNode) {
+          path.unshift(currentNode.name)
+          currentNode = currentNode.parent
+        }
+
+        return path
+      }
+
+      // Add current node to closed set
+      closedSet.add(current.name)
+
+      // Get neighbors
+      const neighbors = connectionMap.get(current.name) || []
+
+      for (const neighbor of neighbors) {
+        // Skip if neighbor is in closed set
+        if (closedSet.has(neighbor.node)) continue
+
+        const neighborNode = nodeMap.get(neighbor.node)
+        if (!neighborNode) continue
+
+        // Calculate g score
+        const gScore = current.g + neighbor.distance
+
+        // Check if neighbor is in open set
+        const openNeighbor = openSet.find((n) => n.name === neighbor.node)
+
+        if (!openNeighbor) {
+          // Add neighbor to open set
+          const hScore = Math.sqrt(Math.pow(endNode.x - neighborNode.x, 2) + Math.pow(endNode.y - neighborNode.y, 2))
+          openSet.push({
+            name: neighborNode.name,
+            x: neighborNode.x,
+            y: neighborNode.y,
+            g: gScore,
+            h: hScore,
+            f: gScore + hScore,
+            parent: current,
+          })
+        } else if (gScore < openNeighbor.g) {
+          // Update neighbor's scores
+          openNeighbor.g = gScore
+          openNeighbor.f = gScore + openNeighbor.h
+          openNeighbor.parent = current
+        }
+      }
+    }
+
+    // No path found
+    return []
+  }
+
+  // Start robot simulation
+  const startSimulation = () => {
+    if (!robotRef.current || !sceneRef.current || isSimulating || !targetNode) return
+
+    // Find start node (named "Start")
+    const startNode = nodes.find((node) => node.name === "Start")
+    if (!startNode) {
+      alert("Start node not found! Please ensure there is a node named 'Start'.")
+      return
+    }
+
+    // Find target node
+    const targetNodeObj = nodes.find((node) => node.name === targetNode)
+    if (!targetNodeObj) {
+      alert("Target node not found!")
+      return
+    }
+
+    // Find path
+    const path = findPath("Start", targetNode)
+    if (path.length === 0) {
+      alert("No path found to target node!")
+      return
+    }
+
+    setSimulationPath(path)
+    setIsSimulating(true)
+
+    // Ensure robot is visible
+    if (robotGroupRef.current) {
+      robotGroupRef.current.visible = true
+    }
+
+    // Position robot at start
+    if (robotRef.current) {
+      robotRef.current.position.set(startNode.x, 0.3, -startNode.y)
+
+      // If there's a next node, orient robot towards it
+      if (path.length > 1) {
+        const nextNodeName = path[1]
+        const nextNode = nodes.find((n) => n.name === nextNodeName)
+        if (nextNode) {
+          const angle = Math.atan2(-(nextNode.y - startNode.y), nextNode.x - startNode.x)
+          robotRef.current.rotation.y = angle
+        }
+      }
+    }
+
+    // Draw path
+    drawPath(path)
+
+    // Animate robot along path
+    animateRobotAlongPath(path)
+  }
+
+  // Draw path
+  const drawPath = (path: string[]) => {
+    if (!sceneRef.current) return
+
+    // Remove existing path
+    if (pathRef.current && sceneRef.current.children.includes(pathRef.current)) {
+      sceneRef.current.remove(pathRef.current)
+    }
+
+    // Create node map for quick lookup
+    const nodeMap = new Map(nodes.map((node) => [node.name, node]))
+
+    // Create path points
+    const points: THREE.Vector3[] = []
+    path.forEach((nodeName) => {
+      const node = nodeMap.get(nodeName)
+      if (node) {
+        points.push(new THREE.Vector3(node.x, 0.5, -node.y))
+      }
+    })
+
+    // Create path line
+    const geometry = new THREE.BufferGeometry().setFromPoints(points)
+    const material = new THREE.LineBasicMaterial({
+      color: 0xff3e00,
+      linewidth: 3,
+    })
+    const line = new THREE.Line(geometry, material)
+    pathRef.current = line
+    sceneRef.current.add(line)
+  }
+
+  // Animate robot along path
+  const animateRobotAlongPath = (path: string[]) => {
+    if (!robotRef.current || path.length < 2) return
+
+    // Create node map for quick lookup
+    const nodeMap = new Map(nodes.map((node) => [node.name, node]))
+
+    // Position robot at start
+    const startNode = nodeMap.get(path[0])
+    if (startNode && robotRef.current) {
+      robotRef.current.position.set(startNode.x, 0.3, -startNode.y)
+    }
+
+    // Create timeline for animation
+    const timeline = gsap.timeline({
+      onComplete: () => {
+        setIsSimulating(false)
+
+        // Add a celebration effect when reaching the destination
+        if (robotRef.current) {
+          gsap.to(robotRef.current.position, {
+            y: 1.0,
+            duration: 0.5,
+            yoyo: true,
+            repeat: 1,
+            ease: "power1.inOut",
+          })
+
+          gsap.to(robotRef.current.rotation, {
+            y: robotRef.current.rotation.y + Math.PI * 2,
+            duration: 1,
+            ease: "power1.inOut",
+          })
+        }
+      },
+    })
+
+    // Animate through each point in the path
+    for (let i = 1; i < path.length; i++) {
+      const currentNode = nodeMap.get(path[i - 1])
+      const nextNode = nodeMap.get(path[i])
+
+      if (currentNode && nextNode && robotRef.current) {
+        // Calculate direction for robot to face
+        const angle = Math.atan2(-(nextNode.y - currentNode.y), nextNode.x - currentNode.x)
+
+        // Add to timeline
+        timeline.to(robotRef.current.rotation, {
+          y: angle,
+          duration: 0.5,
+          ease: "power1.inOut",
+        })
+
+        // Move to next node with a slight bounce effect
+        timeline.to(robotRef.current.position, {
+          x: nextNode.x,
+          z: -nextNode.y,
+          y: 0.3 + Math.random() * 0.2, // Add slight random bounce
+          duration: 2.0, // Slower for better visibility
+          ease: "power2.inOut",
+        })
+      }
+    }
+  }
+
+  // Reset simulation
+  const resetSimulation = () => {
+    setIsSimulating(false)
+    setSimulationPath([])
+
+    // Hide robot
+    if (robotGroupRef.current) {
+      robotGroupRef.current.visible = false
+    }
+
+    // Remove path
+    if (pathRef.current && sceneRef.current && sceneRef.current.children.includes(pathRef.current)) {
+      sceneRef.current.remove(pathRef.current)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -796,6 +1190,58 @@ export default function WarehouseMonitoringPage() {
                 </Label>
               </div>
               <Switch id="boxes-toggle" checked={showBoxes} onCheckedChange={setShowBoxes} />
+            </div>
+
+            <Separator className="my-4 bg-zinc-800" />
+
+            {/* Robot Simulation Controls */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <Target className="h-5 w-5 text-orange-500" />
+                Robot Simulation
+              </h3>
+
+              <div className="space-y-2">
+                <Label htmlFor="target-node">Target Node</Label>
+                <Select value={targetNode} onValueChange={setTargetNode} disabled={isSimulating}>
+                  <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                    <SelectValue placeholder="Select target node" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-800 border-zinc-700">
+                    {nodes.map((node) => (
+                      <SelectItem key={node.name} value={node.name}>
+                        {node.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                  onClick={startSimulation}
+                  disabled={isSimulating || !targetNode}
+                >
+                  <Play className="mr-2 h-4 w-4" />
+                  Start
+                </Button>
+                <Button
+                  className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white"
+                  onClick={resetSimulation}
+                  disabled={!isSimulating && simulationPath.length === 0}
+                >
+                  <RotateCw className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
+              </div>
+
+              {simulationPath.length > 0 && (
+                <div className="bg-zinc-800 p-3 rounded-lg">
+                  <div className="text-zinc-400 text-sm mb-1">Path</div>
+                  <div className="text-sm text-white">{simulationPath.join(" → ")}</div>
+                </div>
+              )}
             </div>
 
             <Separator className="my-4 bg-zinc-800" />

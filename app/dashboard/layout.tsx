@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-
+import { ChatBot } from "@/components/chat-bot"
 export default function DashboardLayout({
   children,
 }: {
@@ -92,10 +92,12 @@ export default function DashboardLayout({
             </nav>
           </div>
         </aside>
-        <main className="h-[93vh] overflow-y-scroll w-full  p-4">
+        <main className="h-[93vh] overflow-scroll w-full  p-4">
           <div className="">{children}</div>
         </main>
+        <ChatBot></ChatBot>
       </div>
+   
     </div>
   )
 }
