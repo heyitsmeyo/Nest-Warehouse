@@ -34,3 +34,14 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+# The warehouse Robot : 
+
+The robot is able to follow the line and deliver packages to the specific shelve.
+
+![20250412_111845](https://github.com/user-attachments/assets/3e3e0327-79e1-4cbe-8bd9-f86ab273c022)
+![20250412_111853_(1)](https://github.com/user-attachments/assets/8b871f9f-72b4-40be-8685-bd91fd2cfb74)
+
+![20250412_105155](https://github.com/user-attachments/assets/9828a005-510a-4597-b3f0-826e3a2399bc)
+
